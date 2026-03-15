@@ -166,23 +166,23 @@ const { useState, useRef, useEffect, useCallback } = React;
 // ═══════════════════════════════════════════
 const GRAVITY = 2200;
 const JUMP_VEL = -680;
-const INITIAL_SPEED = 300;
-const MAX_SPEED = 750;
-const SPEED_INCREMENT = 30;
-const MEG_BASE_GAIN = 18;
-const MEG_GAIN_INCREMENT = 6;
+const INITIAL_SPEED = 250;
+const MAX_SPEED = 700;
+const SPEED_INCREMENT = 15;
+const MEG_BASE_GAIN = 8;
+const MEG_GAIN_INCREMENT = 3;
 const MEG_START_DIST = 500;
-const BOOST_DURATION = 3;
+const BOOST_DURATION = 1.5;
 const BOOST_MULTIPLIER = 1.8;
-const BOOST_PUSHBACK = 280;
-const JAIL_BOOST = 0.6;
+const BOOST_PUSHBACK = 180;
+const JAIL_BOOST = 0.5;
 const OBS_MIN_GAP = 220;
 const OBS_MIN_GAP_LATE = 130;
-const INVINCIBLE_DURATION = 2.5;
+const INVINCIBLE_DURATION = 1.5;
 const JAIL_MASH_TARGET = 18;
 const JAIL_DECAY = 1.5;
 const JAIL_TIMEOUT = 10;
-const DIFF_INTERVAL = 30;
+const DIFF_INTERVAL = 20;
 const GROUND_RATIO = 0.78; // ground at 78% of canvas height
 const GRIFFIN_W = 34;
 const GRIFFIN_H = 52;
@@ -464,10 +464,11 @@ function drawGriffin(ctx, g, time, groundY) {
 }
 
 function drawMegalodon(ctx, meg, time, groundY, W) {
-  if (meg.distance > W) return;
-  const screenX = Math.max(-200, 150 - meg.distance);
+  // Always show megalodon — it should always be visible chasing from the left
   const closeness = clamp(1 - meg.distance / MEG_START_DIST, 0, 1);
-  const scale = lerp(0.5, 1.4, closeness);
+  // When far: peeking in from left edge (~x=-30). When close: pushing into screen (~x=120)
+  const screenX = lerp(-30, 120, closeness);
+  const scale = lerp(0.7, 1.5, closeness);
 
   ctx.save();
   ctx.translate(screenX, groundY - 40 * scale);
@@ -580,7 +581,14 @@ function drawMegalodon(ctx, meg, time, groundY, W) {
 
 function drawObstacle(ctx, obs, groundY) {
   ctx.save();
-  ctx.translate(obs.x, obs.y);
+  if (obs.hit) {
+    ctx.globalAlpha = clamp(obs.hitAlpha, 0, 1);
+    ctx.translate(obs.x + obs.w / 2, obs.y - obs.h / 2);
+    ctx.rotate(obs.hitRot);
+    ctx.translate(-obs.w / 2, obs.h / 2);
+  } else {
+    ctx.translate(obs.x, obs.y);
+  }
 
   switch (obs.type) {
     case 'rock': {
@@ -722,53 +730,96 @@ function drawJail(ctx, j, time) {
   ctx.save();
   ctx.translate(j.x, j.y);
 
-  // Cage back
-  ctx.fillStyle = 'rgba(100,100,100,0.3)';
+  // Pulsing glow around cage
+  const glowPulse = 0.3 + Math.sin(time * 4) * 0.15;
+  ctx.fillStyle = `rgba(255, 215, 0, ${glowPulse})`;
+  ctx.beginPath();
+  ctx.ellipse(j.w / 2, -j.h / 2, j.w * 0.7, j.h * 0.65, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cage background
+  ctx.fillStyle = 'rgba(60, 60, 60, 0.4)';
   ctx.fillRect(0, -j.h, j.w, j.h);
 
-  // Friend inside - simple character
+  // Friend inside - bigger character
+  const cx = j.w / 2;
+  // Head
   ctx.fillStyle = '#ffcc80';
   ctx.beginPath();
-  ctx.arc(j.w / 2, -j.h * 0.6, 8, 0, Math.PI * 2);
+  ctx.arc(cx, -j.h * 0.58, 12, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#9C27B0';
-  ctx.fillRect(j.w / 2 - 6, -j.h * 0.45, 12, 16);
-  // Waving arm
-  const wave = Math.sin(time * 5) * 0.3;
-  ctx.strokeStyle = '#ffcc80';
-  ctx.lineWidth = 3;
+  // Hair
+  ctx.fillStyle = '#FF6F00';
   ctx.beginPath();
-  ctx.moveTo(j.w / 2 + 6, -j.h * 0.4);
-  ctx.lineTo(j.w / 2 + 12, -j.h * 0.55 + wave * 5);
-  ctx.stroke();
-  // Sad face
+  ctx.arc(cx, -j.h * 0.64, 11, Math.PI, 0);
+  ctx.fill();
+  // Body/shirt
+  ctx.fillStyle = '#9C27B0';
+  ctx.beginPath();
+  ctx.roundRect(cx - 10, -j.h * 0.44, 20, 24, 3);
+  ctx.fill();
+  // Legs
+  ctx.fillStyle = '#5D4037';
+  ctx.fillRect(cx - 8, -j.h * 0.44 + 24, 7, 12);
+  ctx.fillRect(cx + 1, -j.h * 0.44 + 24, 7, 12);
+  // Eyes (worried)
   ctx.fillStyle = '#333';
   ctx.beginPath();
-  ctx.arc(j.w / 2 + 2, -j.h * 0.62, 1.5, 0, Math.PI * 2);
+  ctx.arc(cx - 4, -j.h * 0.58, 2, 0, Math.PI * 2);
+  ctx.arc(cx + 4, -j.h * 0.58, 2, 0, Math.PI * 2);
   ctx.fill();
+  // Sad mouth
   ctx.strokeStyle = '#333';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(j.w / 2 + 1, -j.h * 0.54, 3, Math.PI, 0);
+  ctx.arc(cx, -j.h * 0.50, 4, Math.PI + 0.3, -0.3);
+  ctx.stroke();
+  // Waving arms
+  const wave = Math.sin(time * 6);
+  ctx.strokeStyle = '#ffcc80';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - 10, -j.h * 0.40);
+  ctx.lineTo(cx - 18, -j.h * 0.55 + wave * 6);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 10, -j.h * 0.40);
+  ctx.lineTo(cx + 18, -j.h * 0.55 - wave * 6);
   ctx.stroke();
 
-  // Bars
-  ctx.strokeStyle = '#777';
-  ctx.lineWidth = 3;
-  for (let i = 0; i <= 4; i++) {
-    const bx = j.w * (i / 4);
+  // Gold cage bars
+  ctx.strokeStyle = '#DAA520';
+  ctx.lineWidth = 4;
+  ctx.shadowColor = '#FFD700';
+  ctx.shadowBlur = 3;
+  const barCount = 6;
+  for (let i = 0; i <= barCount; i++) {
+    const bx = j.w * (i / barCount);
     ctx.beginPath();
     ctx.moveTo(bx, -j.h);
     ctx.lineTo(bx, 0);
     ctx.stroke();
   }
   // Top/bottom bar
+  ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.moveTo(0, -j.h);
-  ctx.lineTo(j.w, -j.h);
-  ctx.moveTo(0, 0);
-  ctx.lineTo(j.w, 0);
+  ctx.moveTo(-2, -j.h);
+  ctx.lineTo(j.w + 2, -j.h);
+  ctx.moveTo(-2, 0);
+  ctx.lineTo(j.w + 2, 0);
   ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // "HELP!" text above cage
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#FFD700';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  const helpBob = Math.sin(time * 3) * 3;
+  ctx.strokeText('HELP!', j.w / 2, -j.h - 8 + helpBob);
+  ctx.fillText('HELP!', j.w / 2, -j.h - 8 + helpBob);
 
   ctx.restore();
 }
@@ -827,6 +878,38 @@ function drawNearMiss(ctx, W, H, time, nmTime) {
   ctx.restore();
 }
 
+function drawHitFlash(ctx, W, H, timer) {
+  if (timer <= 0) return;
+  const alpha = clamp(timer / 0.35, 0, 1) * 0.5;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
+function drawHitText(ctx, W, H, time, hitTime) {
+  const age = time - hitTime;
+  if (age > 1.2) return;
+  const alpha = age < 0.3 ? age / 0.3 : clamp(1 - (age - 0.3) / 0.9, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = 'bold 48px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ff3333';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 4;
+  const texts = ['OUCH!', 'OOF!', 'YIKES!'];
+  const text = texts[Math.floor(hitTime * 10) % texts.length];
+  const scale = age < 0.15 ? lerp(0.5, 1.2, age / 0.15) : lerp(1.2, 1, clamp((age - 0.15) / 0.3, 0, 1));
+  const ty = H * 0.3 - age * 30;
+  ctx.translate(W / 2, ty);
+  ctx.scale(scale, scale);
+  ctx.strokeText(text, 0, 0);
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
 // ═══════════════════════════════════════════
 // GAME STATE
 // ═══════════════════════════════════════════
@@ -857,6 +940,8 @@ function createGameState(capeColor) {
     nextBoostDist: 600,
     nextJailDist: 900,
     nearMissTime: -10,
+    hitFlashTimer: 0,
+    hitTextTime: -10,
     paused: false,
   };
 }
@@ -978,18 +1063,32 @@ function updateGame(gs, input, dt, groundY, W, H) {
   // Spawn jails
   if (gs.distance * 20 > gs.nextJailDist) {
     gs.jails.push({
-      x: W + 50, y: groundY, w: 40, h: 50, freed: false
+      x: W + 50, y: groundY, w: 75, h: 90, freed: false
     });
     gs.nextJailDist += rand(600, 1000);
   }
 
+  // Decrement hit flash timer
+  if (gs.hitFlashTimer > 0) gs.hitFlashTimer -= dt;
+
   // Move objects
-  for (const obs of gs.obstacles) obs.x -= speed * dt;
+  for (const obs of gs.obstacles) {
+    if (obs.hit) {
+      // Hit obstacle flies away
+      obs.x += obs.hitVx * dt;
+      obs.y += obs.hitVy * dt;
+      obs.hitVy += 600 * dt; // gravity
+      obs.hitRot += obs.hitRotSpeed * dt;
+      obs.hitAlpha -= dt * 2;
+    } else {
+      obs.x -= speed * dt;
+    }
+  }
   for (const b of gs.boosts) b.x -= speed * dt;
   for (const j of gs.jails) j.x -= speed * dt;
 
   // Remove off-screen objects
-  gs.obstacles = gs.obstacles.filter(o => o.x + o.w > -50);
+  gs.obstacles = gs.obstacles.filter(o => (o.hit ? o.hitAlpha > 0 : o.x + o.w > -50));
   gs.boosts = gs.boosts.filter(b => b.x + b.w > -50);
   gs.jails = gs.jails.filter(j => j.x + j.w > -50);
 
@@ -1016,12 +1115,24 @@ function updateGame(gs, input, dt, groundY, W, H) {
         }
         g.isInvincible = true;
         g.invincibleTimer = INVINCIBLE_DURATION;
-        // Spawn hit particles
-        for (let i = 0; i < 8; i++) {
+        // Screen flash + hit text
+        gs.hitFlashTimer = 0.35;
+        gs.hitTextTime = gs.time;
+        // Mark obstacle as hit (it will fly away)
+        obs.hit = true;
+        obs.hitVx = rand(100, 300);
+        obs.hitVy = rand(-400, -200);
+        obs.hitRot = 0;
+        obs.hitRotSpeed = rand(-8, 8);
+        obs.hitAlpha = 1;
+        // Spawn big hit particles — white/yellow sparks + red
+        for (let i = 0; i < 18; i++) {
           gs.particles.push({
-            x: g.x, y: g.y - 20,
-            vx: rand(-100, 100), vy: rand(-150, 50),
-            life: 0.5, maxLife: 0.5, color: '#ff4444', size: rand(2, 5)
+            x: g.x + rand(-10, 15), y: g.y - rand(10, 30),
+            vx: rand(-180, 180), vy: rand(-250, 50),
+            life: 0.7, maxLife: 0.7,
+            color: ['#ff4444', '#ff8800', '#FFD700', '#fff'][Math.floor(Math.random() * 4)],
+            size: rand(3, 7)
           });
         }
         break;
@@ -1453,6 +1564,12 @@ function App() {
 
       // Near miss
       drawNearMiss(ctx, W, H, gs.time, gs.nearMissTime);
+
+      // Hit flash overlay
+      drawHitFlash(ctx, W, H, gs.hitFlashTimer);
+
+      // Hit text ("OUCH!", "OOF!")
+      drawHitText(ctx, W, H, gs.time, gs.hitTextTime);
 
       ctx.restore();
 
