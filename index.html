@@ -195,7 +195,7 @@ const PARTICLE_MAX = 60;
 const MEG_MIN_WIDTH = 200;
 const MEG_MAX_WIDTH = 400;
 const SHIELD_DURATION = 1.0;
-const RUNNER_CATCH_THRESHOLDS = [350, 250, 150];
+const RUNNER_CATCH_THRESHOLDS = [420, 330, 240];
 const RUNNER_NAMES = ['Zara', 'Max', 'Luna'];
 const RUNNER_CATCH_ANIM_DURATION = 2.0;
 
@@ -477,211 +477,239 @@ function drawGriffin(ctx, g, time, groundY) {
 
 function drawMegalodon(ctx, meg, time, groundY, W) {
   const closeness = clamp(1 - meg.distance / MEG_START_DIST, 0, 1);
-  const bodyWidth = lerp(MEG_MIN_WIDTH, MEG_MAX_WIDTH, closeness);
-  const bodyHeight = bodyWidth * 0.45;
-  const noseX = lerp(0, W * 0.4, closeness);
-  const bodyCenterY = groundY - bodyHeight * 0.6;
+  // Scale: shark gets bigger as it closes in
+  const scale = lerp(0.8, 1.8, closeness);
+  // Position: body center moves from left edge inward as it gets closer
+  // At closeness=0: centerX puts the nose just peeking onto screen
+  // At closeness=1: nose is at ~35% of screen width
+  const baseW = 120; // base body half-width before scaling
+  const centerX = lerp(baseW * scale * 0.3, W * 0.22, closeness);
+  const centerY = groundY - 40 * scale;
   const anger = meg.anger;
 
   ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.scale(scale, scale);
 
-  // Colors
-  const topR = lerp(100, 160, anger) | 0;
-  const topG = lerp(115, 80, anger) | 0;
-  const topB = lerp(145, 100, anger) | 0;
+  // Colors — shift from blue-grey to reddish with anger
+  const topR = lerp(95, 155, anger) | 0;
+  const topG = lerp(110, 75, anger) | 0;
+  const topB = lerp(140, 95, anger) | 0;
   const topColor = `rgb(${topR},${topG},${topB})`;
-  const darkColor = `rgb(${(topR-15)|0},${(topG-15)|0},${(topB-15)|0})`;
+  const darkColor = `rgb(${(topR-20)|0},${(topG-20)|0},${(topB-20)|0})`;
+  const bellyColor = 'rgb(190,200,208)';
 
-  const tailX = noseX - bodyWidth;
-  const midX = noseX - bodyWidth * 0.5;
-
-  // Tail — crescent at rear
+  // ── TAIL (draw first, behind body) ──
   ctx.fillStyle = topColor;
   ctx.beginPath();
-  ctx.moveTo(tailX, bodyCenterY);
-  ctx.lineTo(tailX - bodyWidth * 0.2, bodyCenterY - bodyHeight * 0.5);
-  ctx.bezierCurveTo(tailX - bodyWidth * 0.1, bodyCenterY - bodyHeight * 0.2,
-    tailX - bodyWidth * 0.08, bodyCenterY, tailX - bodyWidth * 0.1, bodyCenterY + bodyHeight * 0.15);
-  ctx.lineTo(tailX - bodyWidth * 0.2, bodyCenterY + bodyHeight * 0.45);
-  ctx.bezierCurveTo(tailX - bodyWidth * 0.08, bodyCenterY + bodyHeight * 0.15,
-    tailX - bodyWidth * 0.05, bodyCenterY + bodyHeight * 0.05, tailX, bodyCenterY);
+  ctx.moveTo(-105, 0);
+  ctx.lineTo(-145, -45);
+  ctx.bezierCurveTo(-130, -25, -115, -5, -115, 10);
+  ctx.lineTo(-145, 40);
+  ctx.bezierCurveTo(-125, 20, -110, 5, -105, 0);
   ctx.fill();
 
-  // Main body — torpedo silhouette
+  // ── MAIN BODY — oval torpedo facing right ──
   ctx.fillStyle = topColor;
   ctx.beginPath();
-  ctx.moveTo(noseX, bodyCenterY);
-  ctx.bezierCurveTo(noseX - bodyWidth * 0.1, bodyCenterY - bodyHeight * 0.55,
-    midX + bodyWidth * 0.1, bodyCenterY - bodyHeight * 0.7,
-    midX - bodyWidth * 0.1, bodyCenterY - bodyHeight * 0.5);
-  ctx.bezierCurveTo(tailX + bodyWidth * 0.15, bodyCenterY - bodyHeight * 0.35,
-    tailX, bodyCenterY - bodyHeight * 0.1, tailX, bodyCenterY);
-  ctx.bezierCurveTo(tailX, bodyCenterY + bodyHeight * 0.15,
-    tailX + bodyWidth * 0.15, bodyCenterY + bodyHeight * 0.45,
-    midX, bodyCenterY + bodyHeight * 0.45);
-  ctx.bezierCurveTo(midX + bodyWidth * 0.2, bodyCenterY + bodyHeight * 0.4,
-    noseX - bodyWidth * 0.08, bodyCenterY + bodyHeight * 0.3, noseX, bodyCenterY);
+  ctx.ellipse(0, 0, 100, 42, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Belly — lighter underside
-  ctx.fillStyle = 'rgb(195,205,210)';
+  // Snout — elongated pointy front
   ctx.beginPath();
-  ctx.moveTo(noseX - bodyWidth * 0.05, bodyCenterY + bodyHeight * 0.05);
-  ctx.bezierCurveTo(noseX - bodyWidth * 0.15, bodyCenterY + bodyHeight * 0.3,
-    midX + bodyWidth * 0.1, bodyCenterY + bodyHeight * 0.4,
-    midX - bodyWidth * 0.05, bodyCenterY + bodyHeight * 0.35);
-  ctx.bezierCurveTo(tailX + bodyWidth * 0.2, bodyCenterY + bodyHeight * 0.3,
-    tailX + bodyWidth * 0.05, bodyCenterY + bodyHeight * 0.1, tailX + bodyWidth * 0.05, bodyCenterY + bodyHeight * 0.05);
-  ctx.bezierCurveTo(midX - bodyWidth * 0.1, bodyCenterY + bodyHeight * 0.08,
-    noseX - bodyWidth * 0.2, bodyCenterY + bodyHeight * 0.05, noseX - bodyWidth * 0.05, bodyCenterY + bodyHeight * 0.05);
+  ctx.moveTo(70, -20);
+  ctx.quadraticCurveTo(120, -8, 130, 0);
+  ctx.quadraticCurveTo(120, 8, 70, 22);
+  ctx.bezierCurveTo(85, 10, 85, -10, 70, -20);
+  ctx.fill();
+
+  // ── BELLY — lighter underside ──
+  ctx.fillStyle = bellyColor;
+  ctx.beginPath();
+  ctx.moveTo(110, 5);
+  ctx.bezierCurveTo(70, 35, -20, 42, -80, 30);
+  ctx.bezierCurveTo(-40, 35, 40, 32, 110, 5);
   ctx.fill();
 
   // Lateral line
-  ctx.strokeStyle = `rgba(${(topR-20)|0},${(topG-20)|0},${(topB-20)|0},0.3)`;
+  ctx.strokeStyle = `rgba(${(topR-25)|0},${(topG-25)|0},${(topB-25)|0},0.35)`;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(noseX - bodyWidth * 0.08, bodyCenterY + bodyHeight * 0.02);
-  ctx.bezierCurveTo(midX + bodyWidth * 0.1, bodyCenterY + bodyHeight * 0.05,
-    midX - bodyWidth * 0.1, bodyCenterY + bodyHeight * 0.05,
-    tailX + bodyWidth * 0.05, bodyCenterY);
+  ctx.moveTo(100, 3);
+  ctx.bezierCurveTo(50, 8, -20, 8, -90, 2);
   ctx.stroke();
 
-  // Gill slits
-  ctx.strokeStyle = 'rgba(60,60,80,0.5)';
+  // ── DORSAL FIN ──
+  ctx.fillStyle = darkColor;
+  ctx.beginPath();
+  ctx.moveTo(-10, -40);
+  ctx.lineTo(-40, -95);
+  ctx.bezierCurveTo(-30, -80, -15, -60, 10, -38);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── PECTORAL FINS ──
+  ctx.fillStyle = darkColor;
+  ctx.beginPath();
+  ctx.moveTo(20, 20);
+  ctx.lineTo(-10, 55);
+  ctx.lineTo(35, 30);
+  ctx.closePath();
+  ctx.fill();
+
+  // Second pectoral (other side, smaller, behind)
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(15, -18);
+  ctx.lineTo(-5, -48);
+  ctx.lineTo(30, -25);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // ── GILL SLITS ──
+  ctx.strokeStyle = 'rgba(50,55,70,0.45)';
   ctx.lineWidth = 1.5;
-  for (let i = 0; i < 5; i++) {
-    const gx = noseX - bodyWidth * 0.35 - i * bodyWidth * 0.04;
+  for (let i = 0; i < 4; i++) {
+    const gx = 30 + i * 12;
     ctx.beginPath();
-    ctx.moveTo(gx, bodyCenterY - bodyHeight * 0.12 - i * 2);
-    ctx.lineTo(gx - 2, bodyCenterY + bodyHeight * 0.1 - i);
+    ctx.moveTo(gx, -12 - i);
+    ctx.lineTo(gx - 3, 12 - i);
     ctx.stroke();
   }
 
-  // Dorsal fin
-  const dorsalX = midX - bodyWidth * 0.05;
-  const dorsalH = bodyWidth * 0.35;
-  ctx.fillStyle = darkColor;
-  ctx.beginPath();
-  ctx.moveTo(dorsalX + bodyWidth * 0.05, bodyCenterY - bodyHeight * 0.45);
-  ctx.lineTo(dorsalX - bodyWidth * 0.05, bodyCenterY - bodyHeight * 0.45 - dorsalH);
-  ctx.bezierCurveTo(dorsalX, bodyCenterY - bodyHeight * 0.45 - dorsalH * 0.7,
-    dorsalX + bodyWidth * 0.05, bodyCenterY - bodyHeight * 0.45 - dorsalH * 0.3,
-    dorsalX + bodyWidth * 0.1, bodyCenterY - bodyHeight * 0.4);
-  ctx.closePath();
-  ctx.fill();
-
-  // Pectoral fins
-  ctx.fillStyle = darkColor;
-  const pecX = midX + bodyWidth * 0.05;
-  ctx.beginPath();
-  ctx.moveTo(pecX, bodyCenterY + bodyHeight * 0.15);
-  ctx.lineTo(pecX - bodyWidth * 0.12, bodyCenterY + bodyHeight * 0.55);
-  ctx.lineTo(pecX + bodyWidth * 0.06, bodyCenterY + bodyHeight * 0.25);
-  ctx.closePath();
-  ctx.fill();
-
-  // Mouth — crescent gape
+  // ── MOUTH — open jaws facing right ──
   const jawOpen = 0.35 + Math.sin(time * 3) * 0.05;
-  const mouthX = noseX;
-  const mouthY = bodyCenterY;
-  const jawH = bodyHeight * 0.25 * jawOpen;
+  const jawAngle = jawOpen * 0.4; // radians
+
+  // Mouth interior (dark red cavity)
+  ctx.fillStyle = '#5a0a0a';
+  ctx.beginPath();
+  ctx.moveTo(95, 0);
+  ctx.lineTo(130, -14 * jawOpen);
+  ctx.lineTo(130, 16 * jawOpen);
+  ctx.closePath();
+  ctx.fill();
 
   // Upper jaw
   ctx.fillStyle = topColor;
   ctx.beginPath();
-  ctx.moveTo(mouthX, mouthY - bodyHeight * 0.02);
-  ctx.lineTo(mouthX + bodyWidth * 0.06, mouthY - jawH * 1.2);
-  ctx.bezierCurveTo(mouthX + bodyWidth * 0.03, mouthY - jawH * 1.5,
-    mouthX - bodyWidth * 0.05, mouthY - jawH * 0.8, mouthX - bodyWidth * 0.1, mouthY - bodyHeight * 0.15);
+  ctx.moveTo(90, -5);
+  ctx.quadraticCurveTo(115, -6, 132, -16 * jawOpen);
+  ctx.quadraticCurveTo(118, -20 * jawOpen, 90, -18);
   ctx.closePath();
   ctx.fill();
 
   // Lower jaw
-  ctx.fillStyle = 'rgb(180,190,195)';
+  ctx.fillStyle = bellyColor;
   ctx.beginPath();
-  ctx.moveTo(mouthX, mouthY + bodyHeight * 0.02);
-  ctx.lineTo(mouthX + bodyWidth * 0.06, mouthY + jawH * 1.3);
-  ctx.bezierCurveTo(mouthX + bodyWidth * 0.03, mouthY + jawH * 1.6,
-    mouthX - bodyWidth * 0.05, mouthY + jawH, mouthX - bodyWidth * 0.1, mouthY + bodyHeight * 0.18);
+  ctx.moveTo(90, 7);
+  ctx.quadraticCurveTo(115, 8, 132, 18 * jawOpen);
+  ctx.quadraticCurveTo(118, 22 * jawOpen, 90, 20);
   ctx.closePath();
   ctx.fill();
 
-  // Mouth interior
-  ctx.fillStyle = '#6b1010';
+  // Gum line upper
+  ctx.fillStyle = '#b04848';
   ctx.beginPath();
-  ctx.moveTo(mouthX - bodyWidth * 0.02, mouthY - bodyHeight * 0.02);
-  ctx.lineTo(mouthX + bodyWidth * 0.04, mouthY - jawH * 0.8);
-  ctx.lineTo(mouthX + bodyWidth * 0.04, mouthY + jawH * 0.9);
-  ctx.lineTo(mouthX - bodyWidth * 0.02, mouthY + bodyHeight * 0.02);
+  ctx.moveTo(92, -6);
+  ctx.quadraticCurveTo(112, -7, 128, -14 * jawOpen);
+  ctx.quadraticCurveTo(114, -12 * jawOpen, 92, -8);
   ctx.closePath();
   ctx.fill();
 
-  // Teeth — uniform small triangles
+  // Gum line lower
+  ctx.beginPath();
+  ctx.moveTo(92, 8);
+  ctx.quadraticCurveTo(112, 9, 128, 16 * jawOpen);
+  ctx.quadraticCurveTo(114, 14 * jawOpen, 92, 10);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── TEETH — rows along both jaws ──
   ctx.fillStyle = '#fff';
   ctx.strokeStyle = '#ddd';
   ctx.lineWidth = 0.5;
-  const toothSize = 4;
-  // Upper teeth
-  for (let i = 0; i < 7; i++) {
-    const t = i / 6;
-    const tx = lerp(mouthX + bodyWidth * 0.04, mouthX - bodyWidth * 0.08, t);
-    const ty = lerp(mouthY - jawH * 0.7, mouthY - bodyHeight * 0.12, t);
+  for (let i = 0; i < 8; i++) {
+    const t = i / 7;
+    // Upper teeth (pointing down)
+    const utx = lerp(128, 90, t);
+    const uty = lerp(-13 * jawOpen, -7, t);
     ctx.beginPath();
-    ctx.moveTo(tx - 2, ty);
-    ctx.lineTo(tx, ty + toothSize);
-    ctx.lineTo(tx + 2, ty);
+    ctx.moveTo(utx - 2.5, uty);
+    ctx.lineTo(utx, uty + 6);
+    ctx.lineTo(utx + 2.5, uty);
     ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  }
-  // Lower teeth
-  for (let i = 0; i < 7; i++) {
-    const t = i / 6;
-    const tx = lerp(mouthX + bodyWidth * 0.04, mouthX - bodyWidth * 0.08, t);
-    const ty = lerp(mouthY + jawH * 0.8, mouthY + bodyHeight * 0.15, t);
+    ctx.fill(); ctx.stroke();
+
+    // Lower teeth (pointing up)
+    const ltx = lerp(128, 90, t);
+    const lty = lerp(15 * jawOpen, 9, t);
     ctx.beginPath();
-    ctx.moveTo(tx - 2, ty);
-    ctx.lineTo(tx, ty - toothSize);
-    ctx.lineTo(tx + 2, ty);
+    ctx.moveTo(ltx - 2.5, lty);
+    ctx.lineTo(ltx, lty - 6);
+    ctx.lineTo(ltx + 2.5, lty);
     ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.fill(); ctx.stroke();
   }
 
-  // Eye — small beady circle
-  const eyeX = noseX - bodyWidth * 0.3;
-  const eyeY = bodyCenterY - bodyHeight * 0.25;
+  // ── EYE ──
   ctx.fillStyle = '#111';
   ctx.beginPath();
-  ctx.arc(eyeX, eyeY, bodyWidth * 0.02, 0, Math.PI * 2);
+  ctx.arc(60, -18, 7, 0, Math.PI * 2);
   ctx.fill();
-  // Eye highlight
-  ctx.fillStyle = '#fff';
+  // Inner iris
+  ctx.fillStyle = '#333';
   ctx.beginPath();
-  ctx.arc(eyeX + 1.5, eyeY - 1.5, bodyWidth * 0.008, 0, Math.PI * 2);
+  ctx.arc(61, -18, 4, 0, Math.PI * 2);
+  ctx.fill();
+  // Highlight
+  ctx.fillStyle = '#aaa';
+  ctx.beginPath();
+  ctx.arc(63, -20, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ddd';
+  ctx.beginPath();
+  ctx.arc(63.5, -20.5, 1, 0, Math.PI * 2);
   ctx.fill();
 
-  // Tiny legs — grounded with round feet
+  // Snout ridge
+  ctx.strokeStyle = `rgba(${(topR-30)|0},${(topG-30)|0},${(topB-30)|0},0.3)`;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(100, -8);
+  ctx.bezierCurveTo(85, -16, 70, -20, 60, -14);
+  ctx.stroke();
+
+  ctx.restore();
+
+  // ── TINY LEGS — drawn in screen space so feet touch groundY ──
+  ctx.save();
   const legColor = topColor;
-  const legW = 8;
-  const legFootW = 10;
-  const legFootH = 6;
   ctx.fillStyle = legColor;
   for (let i = 0; i < 4; i++) {
-    const lx = midX - bodyWidth * 0.2 + i * bodyWidth * 0.12;
-    const bodyBottomAtLeg = bodyCenterY + bodyHeight * 0.3;
-    const legLen = groundY - bodyBottomAtLeg - legFootH;
+    // Leg attachment point on the belly in screen coords
+    const attachLocalX = -30 + i * 25;
+    const attachLocalY = 28;
+    const attachX = centerX + attachLocalX * scale;
+    const attachY = centerY + attachLocalY * scale;
+    const legW = 7 * scale;
+    const footW = 9 * scale;
+    const footH = 5 * scale;
+    const legLen = groundY - attachY - footH;
+
     const phase = time * 25 + i * Math.PI / 2;
-    const swingX = Math.sin(phase) * 8;
+    const swingX = Math.sin(phase) * 7 * scale;
 
-    // Leg
-    ctx.fillRect(lx + swingX * 0.5 - legW / 2, bodyBottomAtLeg, legW, Math.max(legLen, 5));
-    // Round foot at groundY
-    ctx.beginPath();
-    ctx.ellipse(lx + swingX, groundY - legFootH / 2, legFootW / 2, legFootH / 2, 0, 0, Math.PI * 2);
-    ctx.fill();
+    if (legLen > 2) {
+      // Leg shaft
+      ctx.fillRect(attachX + swingX * 0.4 - legW / 2, attachY, legW, legLen);
+      // Round foot
+      ctx.beginPath();
+      ctx.ellipse(attachX + swingX, groundY - footH / 2, footW / 2, footH / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
-
   ctx.restore();
 }
 
@@ -1865,7 +1893,7 @@ function updateGame(gs, input, dt, groundY, W, H) {
   gs.distance += speed * dt * 0.05 * (comboMultiplier - 1); // extra distance from combo
 
   // Megalodon roar
-  if (meg.distance < 200 && gs.time - gs.lastRoarTime > 15) {
+  if (meg.distance < 350 && gs.time - gs.lastRoarTime > 12) {
     gs.roarActive = true;
     gs.roarStartTime = gs.time;
     gs.lastRoarTime = gs.time;
