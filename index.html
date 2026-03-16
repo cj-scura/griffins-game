@@ -173,11 +173,11 @@ const MEG_BASE_GAIN = 8;
 const MEG_GAIN_INCREMENT = 3;
 const MEG_START_DIST = 500;
 const BOOST_DURATION = 1.5;
-const BOOST_MULTIPLIER = 1.8;
+const BOOST_MULTIPLIER = 1.25;
 const BOOST_PUSHBACK = 180;
 const JAIL_BOOST = 0.5;
-const OBS_MIN_GAP = 220;
-const OBS_MIN_GAP_LATE = 130;
+const OBS_MIN_GAP = 350;
+const OBS_MIN_GAP_LATE = 220;
 const INVINCIBLE_DURATION = 1.5;
 const JAIL_MASH_TARGET = 18;
 const JAIL_DECAY = 1.5;
@@ -232,7 +232,7 @@ function drawClouds(ctx, W, scrollOffset, groundY) {
 
 function drawMountains(ctx, W, scrollOffset, groundY) {
   const speed = 0.08;
-  ctx.fillStyle = '#8b7daa';
+  ctx.fillStyle = '#4a3d6b';
   ctx.beginPath();
   ctx.moveTo(0, groundY);
   for (let x = -50; x <= W + 50; x += 30) {
@@ -244,7 +244,7 @@ function drawMountains(ctx, W, scrollOffset, groundY) {
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#a094c0';
+  ctx.fillStyle = '#6b5d8a';
   ctx.beginPath();
   ctx.moveTo(0, groundY);
   for (let x = -50; x <= W + 50; x += 25) {
@@ -464,116 +464,189 @@ function drawGriffin(ctx, g, time, groundY) {
 }
 
 function drawMegalodon(ctx, meg, time, groundY, W) {
-  // Always show megalodon — it should always be visible chasing from the left
+  // Always visible chasing from the left
   const closeness = clamp(1 - meg.distance / MEG_START_DIST, 0, 1);
-  // When far: peeking in from left edge (~x=-30). When close: pushing into screen (~x=120)
-  const screenX = lerp(-30, 120, closeness);
-  const scale = lerp(0.7, 1.5, closeness);
+  const screenX = lerp(-60, 140, closeness);
+  const scale = lerp(1.2, 2.2, closeness);
 
   ctx.save();
-  ctx.translate(screenX, groundY - 40 * scale);
+  ctx.translate(screenX, groundY - 55 * scale);
   ctx.scale(scale, scale);
 
   const anger = meg.anger;
-  const bodyR = lerp(80, 180, anger);
-  const bodyG = lerp(80, 60, anger);
-  const bodyB = lerp(120, 60, anger);
 
-  // Body
-  ctx.fillStyle = `rgb(${bodyR|0},${bodyG|0},${bodyB|0})`;
+  // Colors — blue-grey shark like reference image
+  const topR = lerp(100, 130, anger);
+  const topG = lerp(110, 90, anger);
+  const topB = lerp(140, 110, anger);
+  const bellyR = 200, bellyG = 210, bellyB = 215;
+
+  // Main body — large torpedo shape
+  ctx.fillStyle = `rgb(${topR|0},${topG|0},${topB|0})`;
   ctx.beginPath();
-  ctx.moveTo(80, 0);
-  ctx.bezierCurveTo(100, -50, 40, -70, -40, -40);
-  ctx.bezierCurveTo(-80, -25, -90, 10, -70, 25);
-  ctx.bezierCurveTo(-40, 50, 60, 40, 80, 0);
+  ctx.moveTo(100, 0);
+  ctx.bezierCurveTo(120, -55, 50, -85, -50, -50);
+  ctx.bezierCurveTo(-100, -30, -120, 10, -90, 30);
+  ctx.bezierCurveTo(-50, 55, 70, 50, 100, 0);
   ctx.fill();
 
-  // Belly
-  ctx.fillStyle = `rgb(${Math.min(bodyR+40,255)|0},${Math.min(bodyG+40,255)|0},${Math.min(bodyB+40,255)|0})`;
+  // Belly — lighter underside
+  ctx.fillStyle = `rgb(${bellyR},${bellyG},${bellyB})`;
   ctx.beginPath();
-  ctx.moveTo(70, 5);
-  ctx.bezierCurveTo(40, 30, -20, 35, -55, 20);
-  ctx.bezierCurveTo(-20, 25, 40, 20, 70, 5);
+  ctx.moveTo(90, 8);
+  ctx.bezierCurveTo(50, 38, -30, 42, -70, 25);
+  ctx.bezierCurveTo(-30, 30, 50, 26, 90, 8);
   ctx.fill();
 
-  // Fin
-  ctx.fillStyle = `rgb(${(bodyR-20)|0},${(bodyG-20)|0},${(bodyB-20)|0})`;
-  ctx.beginPath();
-  ctx.moveTo(-10, -40);
-  ctx.lineTo(-30, -80);
-  ctx.lineTo(10, -35);
-  ctx.closePath();
-  ctx.fill();
-
-  // Tail
-  ctx.beginPath();
-  ctx.moveTo(-70, 0);
-  ctx.lineTo(-110, -30);
-  ctx.lineTo(-100, 0);
-  ctx.lineTo(-110, 25);
-  ctx.closePath();
-  ctx.fill();
-
-  // Mouth
-  ctx.fillStyle = '#cc0000';
-  ctx.beginPath();
-  ctx.moveTo(80, 0);
-  ctx.lineTo(95, -15);
-  ctx.lineTo(95, 15);
-  ctx.closePath();
-  ctx.fill();
-
-  // Teeth
-  ctx.fillStyle = '#fff';
+  // Gill slits
+  ctx.strokeStyle = `rgba(60,60,80,0.5)`;
+  ctx.lineWidth = 1.5;
   for (let i = 0; i < 5; i++) {
-    // Top teeth
+    const gx = 20 + i * 10;
     ctx.beginPath();
-    ctx.moveTo(82 + i * 2.5, -2 - i * 2.5);
-    ctx.lineTo(85 + i * 2, -8 - i * 1.5);
-    ctx.lineTo(88 + i * 2, -2 - i * 2);
-    ctx.fill();
-    // Bottom teeth
-    ctx.beginPath();
-    ctx.moveTo(82 + i * 2.5, 2 + i * 2.5);
-    ctx.lineTo(85 + i * 2, 8 + i * 1.5);
-    ctx.lineTo(88 + i * 2, 2 + i * 2);
-    ctx.fill();
-  }
-
-  // Eye
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(40, -25, 10, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = lerp(0, 1, anger) > 0.5 ? '#cc0000' : '#333';
-  ctx.beginPath();
-  ctx.arc(43, -25, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(44, -27, 2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Angry eyebrow
-  if (anger > 0.3) {
-    ctx.strokeStyle = `rgb(${bodyR|0},${Math.max(bodyG-30,0)|0},${Math.max(bodyB-30,0)|0})`;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(30, -35 - anger * 3);
-    ctx.lineTo(50, -33);
+    ctx.moveTo(gx, -10 - i * 2);
+    ctx.lineTo(gx - 2, 8 - i);
     ctx.stroke();
   }
 
+  // Dorsal fin — tall
+  ctx.fillStyle = `rgb(${(topR - 15)|0},${(topG - 15)|0},${(topB - 15)|0})`;
+  ctx.beginPath();
+  ctx.moveTo(-5, -50);
+  ctx.lineTo(-35, -105);
+  ctx.bezierCurveTo(-25, -95, -5, -80, 15, -48);
+  ctx.closePath();
+  ctx.fill();
+
+  // Pectoral fin
+  ctx.beginPath();
+  ctx.moveTo(15, 15);
+  ctx.lineTo(-15, 55);
+  ctx.lineTo(30, 30);
+  ctx.closePath();
+  ctx.fill();
+
+  // Tail — large crescent
+  ctx.fillStyle = `rgb(${topR|0},${topG|0},${topB|0})`;
+  ctx.beginPath();
+  ctx.moveTo(-90, 0);
+  ctx.lineTo(-140, -40);
+  ctx.bezierCurveTo(-125, -20, -120, 0, -125, 15);
+  ctx.lineTo(-140, 35);
+  ctx.bezierCurveTo(-120, 15, -100, 5, -90, 0);
+  ctx.fill();
+
+  // === OPEN MOUTH — wide gape like reference ===
+  const jawOpen = 0.4 + Math.sin(time * 3) * 0.08; // subtle jaw movement
+
+  // Upper jaw
+  ctx.fillStyle = `rgb(${topR|0},${topG|0},${topB|0})`;
+  ctx.beginPath();
+  ctx.moveTo(100, -5);
+  ctx.lineTo(130, -18 * jawOpen * 2);
+  ctx.bezierCurveTo(125, -25 * jawOpen * 2, 110, -28 * jawOpen * 2, 95, -20);
+  ctx.closePath();
+  ctx.fill();
+
+  // Lower jaw
+  ctx.fillStyle = `rgb(${bellyR - 20},${bellyG - 20},${bellyB - 20})`;
+  ctx.beginPath();
+  ctx.moveTo(100, 5);
+  ctx.lineTo(130, 22 * jawOpen * 2);
+  ctx.bezierCurveTo(125, 28 * jawOpen * 2, 110, 30 * jawOpen * 2, 95, 22);
+  ctx.closePath();
+  ctx.fill();
+
+  // Mouth interior — dark red
+  ctx.fillStyle = '#8b1a1a';
+  ctx.beginPath();
+  ctx.moveTo(100, -3);
+  ctx.lineTo(125, -12 * jawOpen * 2);
+  ctx.lineTo(125, 15 * jawOpen * 2);
+  ctx.lineTo(100, 5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Gums — pinkish
+  ctx.fillStyle = '#c25a5a';
+  ctx.beginPath();
+  ctx.moveTo(102, -4);
+  ctx.lineTo(122, -10 * jawOpen * 2);
+  ctx.lineTo(122, -5 * jawOpen * 2);
+  ctx.lineTo(102, -1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(102, 5);
+  ctx.lineTo(122, 8 * jawOpen * 2);
+  ctx.lineTo(122, 13 * jawOpen * 2);
+  ctx.lineTo(102, 6);
+  ctx.closePath();
+  ctx.fill();
+
+  // Upper teeth — triangular, pointing down, visible rows
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#ddd';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 8; i++) {
+    const tx = 100 + i * 3.5;
+    const baseY = -3 - i * jawOpen * 3;
+    const toothH = 6 + (i < 4 ? i * 1.5 : (7 - i) * 1.5);
+    ctx.beginPath();
+    ctx.moveTo(tx - 2, baseY);
+    ctx.lineTo(tx, baseY + toothH);
+    ctx.lineTo(tx + 2, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Lower teeth — triangular, pointing up
+  for (let i = 0; i < 7; i++) {
+    const tx = 101 + i * 3.5;
+    const baseY = 5 + i * jawOpen * 3;
+    const toothH = 5 + (i < 3 ? i * 1.5 : (6 - i) * 1.5);
+    ctx.beginPath();
+    ctx.moveTo(tx - 2, baseY);
+    ctx.lineTo(tx, baseY - toothH);
+    ctx.lineTo(tx + 2, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Eye — black beady shark eye
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.arc(55, -30, 8, 0, Math.PI * 2);
+  ctx.fill();
+  // Eye highlight
+  ctx.fillStyle = '#555';
+  ctx.beginPath();
+  ctx.arc(57, -32, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#999';
+  ctx.beginPath();
+  ctx.arc(58, -33, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Snout ridge
+  ctx.strokeStyle = `rgba(${(topR-30)|0},${(topG-30)|0},${(topB-30)|0},0.4)`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(95, -10);
+  ctx.bezierCurveTo(80, -20, 65, -28, 55, -22);
+  ctx.stroke();
+
   // Tiny legs - comically small and fast
   const legSpeed = 25;
-  ctx.fillStyle = `rgb(${bodyR|0},${bodyG|0},${bodyB|0})`;
+  ctx.fillStyle = `rgb(${topR|0},${topG|0},${topB|0})`;
   for (let i = 0; i < 4; i++) {
-    const lx = -40 + i * 30;
+    const lx = -50 + i * 35;
     const phase = time * legSpeed + i * Math.PI / 2;
-    const ly = 25 + Math.abs(Math.sin(phase)) * 12;
-    ctx.fillRect(lx - 4, 20, 8, ly - 20);
-    // Tiny foot
-    ctx.fillRect(lx - 5, ly - 2, 10, 5);
+    const ly = 30 + Math.abs(Math.sin(phase)) * 15;
+    ctx.fillRect(lx - 5, 25, 10, ly - 25);
+    ctx.fillRect(lx - 6, ly - 2, 12, 5);
   }
 
   ctx.restore();
@@ -1049,7 +1122,7 @@ function updateGame(gs, input, dt, groundY, W, H) {
   if (gs.distance * 20 > gs.nextObstacleDist) {
     spawnObstacle(gs, groundY, W);
     const gap = lerp(OBS_MIN_GAP, OBS_MIN_GAP_LATE, clamp(gs.time / 180, 0, 1));
-    gs.nextObstacleDist += gap + rand(0, 100);
+    gs.nextObstacleDist += gap + rand(50, 200);
   }
 
   // Spawn boosts
@@ -1062,10 +1135,19 @@ function updateGame(gs, input, dt, groundY, W, H) {
 
   // Spawn jails
   if (gs.distance * 20 > gs.nextJailDist) {
+    const jailX = W + 50;
     gs.jails.push({
-      x: W + 50, y: groundY, w: 75, h: 90, freed: false
+      x: jailX, y: groundY, w: 75, h: 90, freed: false
     });
     gs.nextJailDist += rand(600, 1000);
+    // Remove any obstacles too close in front of the jail (clear zone)
+    gs.obstacles = gs.obstacles.filter(o => {
+      if (o.hit) return true;
+      const dist = Math.abs(o.x - jailX);
+      return dist > 180;
+    });
+    // Push next obstacle spawn further out so nothing spawns right after jail
+    gs.nextObstacleDist = Math.max(gs.nextObstacleDist, gs.distance * 20 + 300);
   }
 
   // Decrement hit flash timer
@@ -1097,8 +1179,8 @@ function updateGame(gs, input, dt, groundY, W, H) {
     ? { x: g.x - 12, y: g.y - DUCK_H / 2, w: 30, h: DUCK_H }
     : { x: g.x - 8, y: g.y - GRIFFIN_H + 5, w: 18, h: GRIFFIN_H - 5 };
 
-  // Collision: obstacles
-  if (!g.isInvincible) {
+  // Collision: obstacles (invincible during boost too)
+  if (!g.isInvincible && !g.isBoosted) {
     for (const obs of gs.obstacles) {
       let obsBox;
       if (obs.isLow) {
