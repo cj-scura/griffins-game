@@ -198,6 +198,8 @@ const SHIELD_DURATION = 1.0;
 const RUNNER_CATCH_THRESHOLDS = [420, 330, 240];
 const RUNNER_NAMES = ['Zara', 'Max', 'Luna'];
 const RUNNER_CATCH_ANIM_DURATION = 2.0;
+const HONEY_DURATION = 3.0;
+const HONEY_SLOW_FACTOR = 0.4; // everything runs at 40% speed
 
 const CAPE_COLORS = { blue: '#3498db', red: '#e74c3c', gold: '#f1c40f' };
 const OBSTACLE_TYPES_GROUND = ['boulder', 'log', 'fence', 'hydrant'];
@@ -1003,6 +1005,80 @@ function drawShieldAura(ctx, g, time, groundY) {
   ctx.restore();
 }
 
+function drawHoney(ctx, h, time) {
+  if (h.collected) return;
+  ctx.save();
+  ctx.translate(h.x + h.w / 2, h.y - h.h / 2);
+  const pulse = Math.sin(time * 5) * 3;
+
+  // Outer glow
+  ctx.fillStyle = 'rgba(255,193,7,0.2)';
+  ctx.beginPath();
+  ctx.arc(0, 0, 22 + pulse, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Honey blob — amber drip shape
+  const grd = ctx.createRadialGradient(-1, -2, 2, 0, 0, 14);
+  grd.addColorStop(0, '#FFE082');
+  grd.addColorStop(0.6, '#FFC107');
+  grd.addColorStop(1, '#FF8F00');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.moveTo(0, -12);
+  ctx.bezierCurveTo(8, -12, 14, -4, 14, 2);
+  ctx.bezierCurveTo(14, 8, 8, 14, 0, 14);
+  ctx.bezierCurveTo(-8, 14, -14, 8, -14, 2);
+  ctx.bezierCurveTo(-14, -4, -8, -12, 0, -12);
+  ctx.fill();
+
+  // Drip at bottom
+  ctx.beginPath();
+  ctx.moveTo(-3, 12);
+  ctx.quadraticCurveTo(0, 20, 3, 12);
+  ctx.fill();
+
+  // Highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(-4, -5, 4, 3, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // "HONEY" label
+  ctx.fillStyle = '#5D4037';
+  ctx.font = 'bold 7px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('HONEY', 0, 3);
+
+  ctx.restore();
+}
+
+function drawHoneyOverlay(ctx, W, H, time, honeyStartTime) {
+  const age = time - honeyStartTime;
+  if (age > HONEY_DURATION) return;
+  // Fade in/out
+  const alpha = age < 0.3 ? age / 0.3 : age > HONEY_DURATION - 0.5 ? (HONEY_DURATION - age) / 0.5 : 1;
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.08;
+  ctx.fillStyle = '#FFC107';
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+  // "SLOOOW" text at start
+  if (age < 1.2) {
+    const textAlpha = age < 0.2 ? age / 0.2 : clamp(1 - (age - 0.2) / 1.0, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = textAlpha;
+    ctx.font = 'bold 42px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#FF8F00';
+    ctx.strokeStyle = '#5D4037';
+    ctx.lineWidth = 3;
+    const ty = H * 0.35 - age * 20;
+    ctx.strokeText('SLOOOW!', W / 2, ty);
+    ctx.fillText('SLOOOW!', W / 2, ty);
+    ctx.restore();
+  }
+}
+
 function drawRunner(ctx, runner, idx, griffinX, griffinY, time, groundY) {
   if (runner.catchPhase === 'gone') return;
   const scale = 0.7;
@@ -1539,6 +1615,12 @@ function createGameState(capeColor) {
     lastRoarTime: -20,
     roarActive: false,
     roarStartTime: -10,
+    // Honey
+    honeys: [],
+    nextHoneyDist: 1500,
+    isSlowed: false,
+    slowTimer: 0,
+    honeyStartTime: -10,
     // Celebration
     celebrationRunners: [],
     // Victory pose
@@ -1596,8 +1678,15 @@ function updateGame(gs, input, dt, groundY, W, H) {
     gs.megalodon.gainSpeed += MEG_GAIN_INCREMENT;
   }
 
+  // Honey slow timer
+  if (gs.isSlowed) {
+    gs.slowTimer -= dt;
+    if (gs.slowTimer <= 0) gs.isSlowed = false;
+  }
+  const slowMul = gs.isSlowed ? HONEY_SLOW_FACTOR : 1;
+
   const g = gs.griffin;
-  const speed = g.isBoosted ? gs.scrollSpeed * BOOST_MULTIPLIER : gs.scrollSpeed;
+  const speed = (g.isBoosted ? gs.scrollSpeed * BOOST_MULTIPLIER : gs.scrollSpeed) * slowMul;
 
   // Scroll
   gs.scrollOffset += speed * dt;
@@ -1639,12 +1728,17 @@ function updateGame(gs, input, dt, groundY, W, H) {
     if (g.invincibleTimer <= 0) { g.isInvincible = false; g.shieldActive = false; }
   }
 
-  // Megalodon
+  // Megalodon — gets more aggressive over time, eventually unstoppable
   const meg = gs.megalodon;
-  const megGain = g.isBoosted ? -150 : meg.gainSpeed;
+  // After 45s, boost pushback becomes less effective; after 90s, nearly zero
+  const pushbackDecay = clamp(1 - (gs.time - 45) / 45, 0.1, 1);
+  // Aggression ramp: after 60s the meg accelerates even faster
+  const lateRamp = gs.time > 60 ? (gs.time - 60) * 0.15 : 0;
+  const effectiveGainSpeed = (meg.gainSpeed + lateRamp) * slowMul;
+  const megGain = g.isBoosted ? -150 * slowMul : effectiveGainSpeed;
   meg.distance -= megGain * dt;
   meg.distance = Math.max(0, meg.distance);
-  meg.anger = clamp(gs.time / 120, 0, 1);
+  meg.anger = clamp(gs.time / 90, 0, 1);
 
   // Runner catch check
   if (gs.nextRunnerCatchIdx < gs.runners.length) {
@@ -1701,6 +1795,14 @@ function updateGame(gs, input, dt, groundY, W, H) {
     gs.nextShieldDist += rand(800, 1200);
   }
 
+  // Spawn honeys
+  if (gs.distance * 20 > gs.nextHoneyDist) {
+    gs.honeys.push({
+      x: W + 50, y: groundY - 30, w: 22, h: 30, collected: false
+    });
+    gs.nextHoneyDist += rand(700, 1100);
+  }
+
   // Spawn jails
   if (gs.distance * 20 > gs.nextJailDist) {
     const jailX = W + 50;
@@ -1736,12 +1838,14 @@ function updateGame(gs, input, dt, groundY, W, H) {
   }
   for (const b of gs.boosts) b.x -= speed * dt;
   for (const s of gs.shields) s.x -= speed * dt;
+  for (const h of gs.honeys) h.x -= speed * dt;
   for (const j of gs.jails) j.x -= speed * dt;
 
   // Remove off-screen objects
   gs.obstacles = gs.obstacles.filter(o => (o.hit ? o.hitAlpha > 0 : o.x + o.w > -50));
   gs.boosts = gs.boosts.filter(b => b.x + b.w > -50);
   gs.shields = gs.shields.filter(s => s.x + s.w > -50);
+  gs.honeys = gs.honeys.filter(h => h.x + h.w > -50);
   gs.jails = gs.jails.filter(j => j.x + j.w > -50);
 
   // Griffin hitbox
@@ -1811,7 +1915,7 @@ function updateGame(gs, input, dt, groundY, W, H) {
         b.collected = true;
         g.isBoosted = true;
         g.boostTimer = BOOST_DURATION;
-        meg.distance += BOOST_PUSHBACK;
+        meg.distance += BOOST_PUSHBACK * pushbackDecay;
         // Spark particles
         for (let i = 0; i < 12; i++) {
           gs.particles.push({
@@ -1842,6 +1946,28 @@ function updateGame(gs, input, dt, groundY, W, H) {
             life: 0.6, maxLife: 0.6,
             color: ['#64B5F6', '#90CAF9', '#fff'][Math.floor(Math.random() * 3)],
             size: rand(2, 5)
+          });
+        }
+      }
+    }
+  }
+
+  // Collision: honeys
+  for (const h of gs.honeys) {
+    if (!h.collected) {
+      const hBox = { x: h.x, y: h.y - h.h, w: h.w, h: h.h };
+      if (aabb(gHitbox, hBox)) {
+        h.collected = true;
+        gs.isSlowed = true;
+        gs.slowTimer = HONEY_DURATION;
+        gs.honeyStartTime = gs.time;
+        for (let i = 0; i < 10; i++) {
+          gs.particles.push({
+            x: h.x + h.w / 2, y: h.y - h.h / 2,
+            vx: rand(-100, 100), vy: rand(-100, 100),
+            life: 0.7, maxLife: 0.7,
+            color: ['#FFC107', '#FFE082', '#FF8F00'][Math.floor(Math.random() * 3)],
+            size: rand(3, 6)
           });
         }
       }
@@ -2293,6 +2419,9 @@ function App() {
       // Shields
       for (const s of gs.shields) drawShield(ctx, s, gs.time);
 
+      // Honeys
+      for (const h of gs.honeys) drawHoney(ctx, h, gs.time);
+
       // Jails
       for (const j of gs.jails) drawJail(ctx, j, gs.time);
 
@@ -2336,6 +2465,9 @@ function App() {
 
       // Roar effect
       if (gs.roarActive) drawRoar(ctx, W, H, gs.time, gs.roarStartTime);
+
+      // Honey slow overlay
+      if (gs.isSlowed) drawHoneyOverlay(ctx, W, H, gs.time, gs.honeyStartTime);
 
       // Near miss
       drawNearMiss(ctx, W, H, gs.time, gs.nearMissTime);
