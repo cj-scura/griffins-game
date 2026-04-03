@@ -477,15 +477,16 @@ function drawGriffin(ctx, g, time, groundY) {
   ctx.globalAlpha = 1;
 }
 
-function drawMegalodon(ctx, meg, time, groundY, W) {
+function drawMegalodon(ctx, meg, time, groundY, W, isEating) {
   const closeness = clamp(1 - meg.distance / MEG_START_DIST, 0, 1);
   // Scale: shark gets bigger as it closes in
   const scale = lerp(0.8, 1.8, closeness);
   // Position: body center moves from left edge inward as it gets closer
   // At closeness=0: centerX puts the nose just peeking onto screen
   // At closeness=1: nose is at ~35% of screen width
-  const baseW = 120; // base body half-width before scaling
-  const centerX = lerp(baseW * scale * 0.3, W * 0.22, closeness);
+  // Position: at closeness=0, body center is well off-screen left (only nose tip peeks in)
+  // At closeness=1, nose reaches ~40% of screen width
+  const centerX = lerp(-100 * scale, W * 0.25, closeness);
   const centerY = groundY - 40 * scale;
   const anger = meg.anger;
 
@@ -581,7 +582,10 @@ function drawMegalodon(ctx, meg, time, groundY, W) {
   }
 
   // ── MOUTH — open jaws facing right ──
-  const jawOpen = 0.35 + Math.sin(time * 3) * 0.05;
+  // When eating, jaw opens wide and chomps rapidly
+  const jawOpen = isEating
+    ? 0.6 + Math.sin(time * 14) * 0.4
+    : 0.35 + Math.sin(time * 3) * 0.05;
   const jawAngle = jawOpen * 0.4; // radians
 
   // Mouth interior (dark red cavity)
@@ -1625,6 +1629,9 @@ function createGameState(capeColor) {
     celebrationRunners: [],
     // Victory pose
     gameOverTime: 0,
+    // Eating animation
+    isBeingEaten: false,
+    eatenStartTime: 0,
   };
 }
 
@@ -2031,10 +2038,39 @@ function updateGame(gs, input, dt, groundY, W, H) {
   // Update celebration runners
   gs.celebrationRunners = gs.celebrationRunners.filter(cr => gs.time - cr.startTime < 5);
 
-  // Megalodon catches Griffin
-  if (meg.distance <= 0 && !g.isInvincible) {
-    gs.paused = true;
-    return 'jail';
+  // Megalodon catches Griffin — start eating animation
+  if (meg.distance <= 0 && !g.isInvincible && !gs.isBeingEaten) {
+    gs.isBeingEaten = true;
+    gs.eatenStartTime = gs.time;
+    meg.distance = 0;
+  }
+
+  // Eating animation plays for 1.5s then transitions to jail
+  if (gs.isBeingEaten) {
+    const eatenElapsed = gs.time - gs.eatenStartTime;
+    if (eatenElapsed > 1.5) {
+      gs.isBeingEaten = false;
+      gs.paused = true;
+      return 'jail';
+    }
+    // Griffin gets pulled left toward megalodon mouth
+    g.x = lerp(150, -20, clamp(eatenElapsed / 1.0, 0, 1));
+    g.isJumping = false;
+    g.isDucking = false;
+    // Freeze megalodon distance at 0
+    meg.distance = 0;
+    // Spawn crunch particles around Griffin
+    if (Math.random() < 0.6) {
+      const colors = ['#ff4444', '#ff8800', '#ffcc00', '#fff'];
+      gs.particles.push({
+        x: g.x + rand(-10, 20), y: groundY - rand(10, 40),
+        vx: rand(-80, 80), vy: rand(-120, -30),
+        life: 0.6, maxLife: 0.6,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: rand(2, 5)
+      });
+    }
+    return null;
   }
 
   // Dust particles
@@ -2393,10 +2429,11 @@ function App() {
         drawGround(ctx, W, H, gs.scrollOffset, groundY);
         drawVictoryPose(ctx, groundY, gs.time, gs.gameOverTime, gs.griffin.capeColor);
       } else {
-      // Screen shake
-      const shakeIntensity = gs.megalodon.distance < 300
+      // Screen shake — extra intense when being eaten
+      const baseShake = gs.megalodon.distance < 300
         ? (300 - gs.megalodon.distance) / 300 * 6
         : 0;
+      const shakeIntensity = gs.isBeingEaten ? 12 : baseShake;
       if (shakeIntensity > 0) {
         ctx.translate(
           (Math.random() - 0.5) * shakeIntensity,
@@ -2426,7 +2463,7 @@ function App() {
       for (const j of gs.jails) drawJail(ctx, j, gs.time);
 
       // Megalodon
-      drawMegalodon(ctx, gs.megalodon, gs.time, groundY, W);
+      drawMegalodon(ctx, gs.megalodon, gs.time, groundY, W, gs.isBeingEaten);
 
       // Runners (behind Griffin)
       for (let i = gs.runners.length - 1; i >= 0; i--) {
@@ -2483,6 +2520,28 @@ function App() {
 
       // Combo text
       drawComboText(ctx, W, H, gs.time, gs.comboDisplayTime, gs.comboDisplayText, gs.comboCount);
+
+      // Eating red flash — "CHOMP!" text
+      if (gs.isBeingEaten) {
+        const eatenT = gs.time - gs.eatenStartTime;
+        const flashAlpha = 0.15 + Math.sin(eatenT * 12) * 0.1;
+        ctx.fillStyle = `rgba(200, 0, 0, ${flashAlpha})`;
+        ctx.fillRect(0, 0, W, H);
+        // CHOMP! text
+        const chompScale = 1 + Math.sin(eatenT * 10) * 0.15;
+        ctx.save();
+        ctx.translate(W / 2, H * 0.3);
+        ctx.scale(chompScale, chompScale);
+        ctx.font = `bold ${Math.min(W * 0.12, 72)}px 'Segoe UI', Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#880000';
+        ctx.lineWidth = 5;
+        ctx.strokeText('CHOMP!', 0, 0);
+        ctx.fillText('CHOMP!', 0, 0);
+        ctx.restore();
+      }
       } // end else (not gameover)
 
       ctx.restore();
