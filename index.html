@@ -190,7 +190,7 @@ const GROUND_RATIO = 0.78; // ground at 78% of canvas height
 const GRIFFIN_W = 34;
 const GRIFFIN_H = 52;
 const DUCK_H = 28;
-const GRIFFIN_BASE_X = 300;
+const GRIFFIN_BASE_X = 450;
 const PARTICLE_MAX = 60;
 
 const MEG_MIN_WIDTH = 200;
@@ -550,7 +550,7 @@ function drawMegalodon(ctx, meg, time, groundY, W, isEating) {
   const closeness = clamp(1 - meg.distance / MEG_START_DIST, 0, 1);
   // Scale: shark gets bigger as it closes in
   const scale = lerp(0.8, 1.8, closeness);
-  const centerX = lerp(-30 * scale, GRIFFIN_BASE_X * 0.7, closeness);
+  const centerX = lerp(120, GRIFFIN_BASE_X * 0.75, closeness);
   const centerY = groundY - 40 * scale;
   const anger = meg.anger;
 
