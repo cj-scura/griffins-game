@@ -190,6 +190,7 @@ const GROUND_RATIO = 0.78; // ground at 78% of canvas height
 const GRIFFIN_W = 34;
 const GRIFFIN_H = 52;
 const DUCK_H = 28;
+const GRIFFIN_BASE_X = 450;
 const PARTICLE_MAX = 60;
 
 const MEG_MIN_WIDTH = 200;
@@ -549,12 +550,7 @@ function drawMegalodon(ctx, meg, time, groundY, W, isEating) {
   const closeness = clamp(1 - meg.distance / MEG_START_DIST, 0, 1);
   // Scale: shark gets bigger as it closes in
   const scale = lerp(0.8, 1.8, closeness);
-  // Position: body center moves from left edge inward as it gets closer
-  // At closeness=0: centerX puts the nose just peeking onto screen
-  // At closeness=1: nose is at ~35% of screen width
-  // Position: at closeness=0, body center is well off-screen left (only nose tip peeks in)
-  // At closeness=1, nose reaches ~40% of screen width
-  const centerX = lerp(-100 * scale, W * 0.25, closeness);
+  const centerX = lerp(120, GRIFFIN_BASE_X * 0.75, closeness);
   const centerY = groundY - 40 * scale;
   const anger = meg.anger;
 
@@ -1645,7 +1641,7 @@ function createGameState(capeColor) {
     difficulty: 0,
     lastDifficultyTime: 0,
     griffin: {
-      x: 150, y: 0, w: GRIFFIN_W, h: GRIFFIN_H,
+      x: GRIFFIN_BASE_X, y: 0, w: GRIFFIN_W, h: GRIFFIN_H,
       vy: 0, isJumping: false, isDucking: false,
       hasDoubleJump: false, usedDoubleJump: false, spinAngle: 0,
       isBoosted: false, boostTimer: 0,
@@ -2158,7 +2154,7 @@ function updateGame(gs, input, dt, groundY, W, H) {
       return 'jail';
     }
     // Griffin gets pulled left toward megalodon mouth
-    g.x = lerp(150, -20, clamp(eatenElapsed / 1.0, 0, 1));
+    g.x = lerp(GRIFFIN_BASE_X, 50, clamp(eatenElapsed / 1.0, 0, 1));
     g.isJumping = false;
     g.isDucking = false;
     // Freeze megalodon distance at 0
@@ -2507,7 +2503,7 @@ function App() {
           setTimeout(() => {
             if (gsRef.current) {
               gsRef.current.paused = false;
-              gsRef.current.griffin.x = 150;
+              gsRef.current.griffin.x = GRIFFIN_BASE_X;
               gsRef.current.griffin.isInvincible = true;
               gsRef.current.griffin.invincibleTimer = INVINCIBLE_DURATION;
               gsRef.current.megalodon.distance = MEG_START_DIST * 0.6;
