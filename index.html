@@ -285,89 +285,221 @@ const SFX = (() => {
 // DRAWING FUNCTIONS
 // ═══════════════════════════════════════════
 
+// Deterministic pseudo-random in [0,1) so scenery is stable while scrolling
+function hash01(n) { const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return s - Math.floor(s); }
+// Wrap a world-space x into a screen range so repeating decorations scroll forever
+function wrapX(x, span) { return ((x % span) + span) % span; }
+
+// Soft elliptical shadow on the ground. `lift` = how far above the ground the
+// object is; higher objects cast smaller, fainter shadows.
+function drawGroundShadow(ctx, x, groundY, w, lift) {
+  const k = clamp(1 - (lift || 0) / 220, 0.45, 1);
+  ctx.save();
+  ctx.fillStyle = `rgba(20, 40, 15, ${0.3 * k})`;
+  ctx.beginPath();
+  ctx.ellipse(x, groundY + 2, (w / 2) * k, Math.max(2, w * 0.09 * k), 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawSky(ctx, W, H, groundY) {
   const grd = ctx.createLinearGradient(0, 0, 0, groundY);
-  grd.addColorStop(0, '#87CEEB');
-  grd.addColorStop(0.7, '#b8e4f9');
-  grd.addColorStop(1, '#f0e68c');
+  grd.addColorStop(0, '#4a90d9');
+  grd.addColorStop(0.55, '#8cc4ef');
+  grd.addColorStop(0.85, '#c9e6f7');
+  grd.addColorStop(1, '#f3ead0');
   ctx.fillStyle = grd;
   ctx.fillRect(0, 0, W, groundY);
+
+  // Sun with a soft glow
+  const sx = W * 0.82, sy = groundY * 0.2;
+  const glow = ctx.createRadialGradient(sx, sy, 10, sx, sy, 140);
+  glow.addColorStop(0, 'rgba(255, 250, 220, 0.9)');
+  glow.addColorStop(0.25, 'rgba(255, 240, 190, 0.35)');
+  glow.addColorStop(1, 'rgba(255, 240, 190, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(sx - 140, sy - 140, 280, 280);
+  ctx.fillStyle = '#fffbe6';
+  ctx.beginPath();
+  ctx.arc(sx, sy, 26, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawClouds(ctx, W, scrollOffset, groundY) {
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  const speed = 0.03;
-  for (let i = 0; i < 5; i++) {
-    const baseX = (i * 320 + 100) - (scrollOffset * speed) % (W + 400);
-    const x = ((baseX % (W + 200)) + W + 200) % (W + 200) - 100;
-    const y = 40 + i * 35 + Math.sin(i * 2.5) * 20;
-    ctx.beginPath();
-    ctx.ellipse(x, y, 60 + i * 8, 22 + i * 3, 0, 0, Math.PI * 2);
-    ctx.ellipse(x - 30, y + 5, 35, 18, 0, 0, Math.PI * 2);
-    ctx.ellipse(x + 35, y + 3, 40, 16, 0, 0, Math.PI * 2);
-    ctx.fill();
+  const span = W + 400;
+  for (let i = 0; i < 6; i++) {
+    const size = 0.6 + hash01(i + 3) * 0.7;      // bigger clouds feel closer...
+    const speed = 0.02 + size * 0.03;             // ...so they drift faster
+    const x = wrapX(i * (span / 6) + hash01(i) * 120 - scrollOffset * speed, span) - 200;
+    const y = groundY * (0.1 + hash01(i + 9) * 0.35);
+    const puffs = [
+      [0, 0, 34], [-36, 8, 24], [36, 6, 27], [-14, -14, 26], [18, -12, 22], [-58, 14, 16], [60, 14, 17],
+    ];
+    // Shaded underside first, then bright tops offset upward
+    ctx.fillStyle = 'rgba(196, 210, 228, 0.95)';
+    for (const [px, py, r] of puffs) {
+      ctx.beginPath();
+      ctx.arc(x + px * size, y + py * size + 5 * size, r * size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
+    for (const [px, py, r] of puffs) {
+      ctx.beginPath();
+      ctx.arc(x + px * size, y + py * size, r * size * 0.94, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 
 function drawMountains(ctx, W, scrollOffset, groundY) {
-  const speed = 0.08;
-  ctx.fillStyle = '#4a3d6b';
+  // ── Layer 1: distant snow-capped peaks (slowest, hazy blue) ──
+  const farSpeed = 0.03;
+  const peakH = (wx) =>
+    150 * Math.pow(1 - Math.abs(Math.sin(wx * 0.0032)), 1.6) +
+    55 * (1 - Math.abs(Math.sin(wx * 0.0085 + 1.3))) +
+    12 * Math.sin(wx * 0.03);
+  ctx.save();
   ctx.beginPath();
-  ctx.moveTo(0, groundY);
-  for (let x = -50; x <= W + 50; x += 30) {
-    const wx = x + scrollOffset * speed;
-    const h = Math.sin(wx * 0.003) * 80 + Math.sin(wx * 0.007) * 40 + Math.sin(wx * 0.013) * 20;
-    ctx.lineTo(x, groundY - 120 - h);
+  ctx.moveTo(-10, groundY);
+  for (let x = -10; x <= W + 10; x += 8) {
+    ctx.lineTo(x, groundY - 70 - peakH(x + scrollOffset * farSpeed));
   }
-  ctx.lineTo(W + 50, groundY);
+  ctx.lineTo(W + 10, groundY);
   ctx.closePath();
+  const farGrd = ctx.createLinearGradient(0, groundY - 280, 0, groundY);
+  farGrd.addColorStop(0, '#6f7fa3');
+  farGrd.addColorStop(1, '#9fb0c8');
+  ctx.fillStyle = farGrd;
+  ctx.fill();
+  // Snow caps: clip to the peaks and paint only the high part white
+  ctx.clip();
+  const snowLine = groundY - 70 - 105;
+  const snow = ctx.createLinearGradient(0, snowLine - 140, 0, snowLine + 6);
+  snow.addColorStop(0, 'rgba(250, 252, 255, 1)');
+  snow.addColorStop(0.6, 'rgba(240, 245, 252, 0.9)');
+  snow.addColorStop(1, 'rgba(240, 245, 252, 0)');
+  ctx.fillStyle = snow;
+  ctx.fillRect(0, snowLine - 140, W, 146);
+  ctx.restore();
+
+  // ── Layer 2: rolling hills (mid distance, darker) ──
+  const midSpeed = 0.08;
+  ctx.beginPath();
+  ctx.moveTo(-10, groundY);
+  for (let x = -10; x <= W + 10; x += 12) {
+    const wx = x + scrollOffset * midSpeed + 500;
+    const h = Math.sin(wx * 0.004) * 45 + Math.sin(wx * 0.0095) * 25 + 15;
+    ctx.lineTo(x, groundY - 55 - h);
+  }
+  ctx.lineTo(W + 10, groundY);
+  ctx.closePath();
+  const midGrd = ctx.createLinearGradient(0, groundY - 140, 0, groundY);
+  midGrd.addColorStop(0, '#4f6f63');
+  midGrd.addColorStop(1, '#3e5c4c');
+  ctx.fillStyle = midGrd;
   ctx.fill();
 
-  ctx.fillStyle = '#6b5d8a';
+  // ── Layer 3: pine tree line (closest, fastest, darkest) ──
+  const treeSpeed = 0.22;
+  const spacing = 18;
+  const offset = scrollOffset * treeSpeed;
+  const firstIdx = Math.floor(offset / spacing) - 2;
+  const count = Math.ceil(W / spacing) + 4;
+  ctx.fillStyle = '#2c4a37';
   ctx.beginPath();
-  ctx.moveTo(0, groundY);
-  for (let x = -50; x <= W + 50; x += 25) {
-    const wx = x + scrollOffset * speed * 1.3 + 500;
-    const h = Math.sin(wx * 0.004) * 50 + Math.sin(wx * 0.009) * 30;
-    ctx.lineTo(x, groundY - 60 - h);
-  }
-  ctx.lineTo(W + 50, groundY);
+  ctx.moveTo(-10, groundY);
+  ctx.lineTo(-10, groundY - 18);
+  ctx.lineTo(W + 10, groundY - 18);
+  ctx.lineTo(W + 10, groundY);
   ctx.closePath();
   ctx.fill();
+  for (let n = 0; n < count; n++) {
+    const idx = firstIdx + n;
+    const tx = idx * spacing - offset + hash01(idx) * 10;
+    const th = 26 + hash01(idx + 100) * 34;
+    const tw = th * 0.42;
+    const base = groundY - 12;
+    ctx.fillStyle = hash01(idx + 200) > 0.5 ? '#2c4a37' : '#284433';
+    ctx.beginPath();
+    ctx.moveTo(tx, base - th);
+    ctx.lineTo(tx + tw / 2, base);
+    ctx.lineTo(tx - tw / 2, base);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Light haze over the horizon so the far layers sit back
+  const haze = ctx.createLinearGradient(0, groundY - 60, 0, groundY);
+  haze.addColorStop(0, 'rgba(220, 235, 240, 0)');
+  haze.addColorStop(1, 'rgba(220, 235, 240, 0.18)');
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, groundY - 60, W, 60);
 }
 
 function drawGround(ctx, W, H, scrollOffset, groundY) {
-  // Ground
+  // Base grass
   const grd = ctx.createLinearGradient(0, groundY, 0, H);
-  grd.addColorStop(0, '#4CAF50');
-  grd.addColorStop(0.3, '#388E3C');
-  grd.addColorStop(1, '#2E7D32');
+  grd.addColorStop(0, '#5aa83e');
+  grd.addColorStop(0.35, '#4a9434');
+  grd.addColorStop(1, '#3a7a2a');
   ctx.fillStyle = grd;
   ctx.fillRect(0, groundY, W, H - groundY);
 
-  // Ground line
-  ctx.strokeStyle = '#33691E';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, groundY);
-  ctx.lineTo(W, groundY);
-  ctx.stroke();
-
-  // Grass tufts
-  ctx.strokeStyle = '#66BB6A';
-  ctx.lineWidth = 1.5;
-  const speed = 1;
-  for (let i = 0; i < 30; i++) {
-    const baseX = i * 55 + 10;
-    const x = ((baseX - scrollOffset * speed) % W + W) % W;
+  // Mowed-lawn stripes, slanted for a bit of perspective
+  const stripeW = 70;
+  const sOff = wrapX(scrollOffset, stripeW * 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+  for (let x = -sOff - stripeW * 2; x < W + stripeW * 2; x += stripeW * 2) {
     ctx.beginPath();
     ctx.moveTo(x, groundY);
-    ctx.lineTo(x - 3, groundY - 8);
-    ctx.moveTo(x, groundY);
-    ctx.lineTo(x + 3, groundY - 10);
-    ctx.moveTo(x, groundY);
-    ctx.lineTo(x, groundY - 9);
-    ctx.stroke();
+    ctx.lineTo(x + stripeW, groundY);
+    ctx.lineTo(x + stripeW - 60, H);
+    ctx.lineTo(x - 60, H);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Sunlit edge where grass meets the horizon
+  ctx.fillStyle = 'rgba(160, 210, 110, 0.55)';
+  ctx.fillRect(0, groundY, W, 3);
+
+  // Pebbles and little flowers scattered in the lawn (lower = closer = faster)
+  const span = W + 100;
+  for (let i = 0; i < 26; i++) {
+    const depth = hash01(i + 50);                  // 0 = near horizon, 1 = bottom
+    const y = groundY + 10 + depth * (H - groundY - 18);
+    const spd = 1 + depth * 0.5;
+    const x = wrapX(hash01(i) * span - scrollOffset * spd, span) - 50;
+    const s = 0.7 + depth * 0.8;
+    if (hash01(i + 70) > 0.45) {
+      ctx.fillStyle = ['#fff6a8', '#ffffff', '#f7a8c8'][i % 3];
+      ctx.beginPath();
+      ctx.arc(x, y, 2 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f2c230';
+      ctx.beginPath();
+      ctx.arc(x, y, 0.9 * s, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = 'rgba(120, 110, 95, 0.55)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, 3 * s, 1.8 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Grass blades along the running line, in two shades and varied heights
+  const bladeSpan = W + 40;
+  for (let i = 0; i < 70; i++) {
+    const x = wrapX(i * (bladeSpan / 70) + hash01(i + 300) * 12 - scrollOffset, bladeSpan) - 20;
+    const h = 6 + hash01(i + 400) * 9;
+    const lean = (hash01(i + 500) - 0.5) * 6;
+    ctx.fillStyle = i % 2 ? '#6fbf4f' : '#4f9a35';
+    ctx.beginPath();
+    ctx.moveTo(x - 2, groundY + 1);
+    ctx.quadraticCurveTo(x + lean * 0.3, groundY - h * 0.6, x + lean, groundY - h);
+    ctx.quadraticCurveTo(x + lean * 0.3 + 1, groundY - h * 0.5, x + 2, groundY + 1);
+    ctx.closePath();
+    ctx.fill();
   }
 }
 
@@ -378,6 +510,10 @@ function drawGriffin(ctx, g, time, groundY) {
   const boosted = g.isBoosted;
   const invincible = g.isInvincible;
   const capeColor = CAPE_COLORS[g.capeColor] || CAPE_COLORS.blue;
+
+  // Ground shadow: shrinks and fades as Griffin jumps higher
+  const restY = groundY - (ducking ? DUCK_H : GRIFFIN_H) / 2;
+  drawGroundShadow(ctx, x + 2, groundY, ducking ? 44 : 34, Math.max(0, restY - y));
 
   // Invincibility blink (only for post-hit, not shield)
   if (invincible && !g.shieldActive && Math.sin(time * 15) < 0) {
@@ -554,6 +690,9 @@ function drawMegalodon(ctx, meg, time, groundY, W, isEating) {
   const centerY = groundY - 40 * scale;
   const anger = meg.anger;
 
+  // Big soft shadow under the shark's belly
+  drawGroundShadow(ctx, centerX + 10 * scale, groundY, 230 * scale, 0);
+
   ctx.save();
   ctx.translate(centerX, centerY);
   ctx.scale(scale, scale);
@@ -577,7 +716,12 @@ function drawMegalodon(ctx, meg, time, groundY, W, isEating) {
   ctx.fill();
 
   // ── MAIN BODY — oval torpedo facing right ──
-  ctx.fillStyle = topColor;
+  // Countershading like a real shark: darker back fading into the side colour
+  const bodyGrd = ctx.createLinearGradient(0, -42, 0, 25);
+  bodyGrd.addColorStop(0, darkColor);
+  bodyGrd.addColorStop(0.55, topColor);
+  bodyGrd.addColorStop(1, topColor);
+  ctx.fillStyle = bodyGrd;
   ctx.beginPath();
   ctx.ellipse(0, 0, 100, 42, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -784,6 +928,10 @@ function drawMegalodon(ctx, meg, time, groundY, W, isEating) {
 }
 
 function drawObstacle(ctx, obs, groundY) {
+  // Shadow on the ground (overhead obstacles cast a fainter, wider one)
+  if (!obs.hit) {
+    drawGroundShadow(ctx, obs.x + obs.w / 2, groundY, obs.w * (obs.isLow ? 0.9 : 1.15), obs.isLow ? 80 : 0);
+  }
   ctx.save();
   if (obs.hit) {
     ctx.globalAlpha = clamp(obs.hitAlpha, 0, 1);
@@ -1164,6 +1312,8 @@ function drawRunner(ctx, runner, idx, griffinX, griffinY, time, groundY) {
   } else {
     y += bob;
   }
+
+  drawGroundShadow(ctx, x + 1, groundY, 26, 0);
 
   ctx.save();
   ctx.translate(x, y);
